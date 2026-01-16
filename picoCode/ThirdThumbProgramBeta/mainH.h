@@ -3,50 +3,98 @@
 #ifndef piPicoHeaderFile
 #define piPicoHeaderFile
 
-double versionNumber = 0.01;
+//=============================================================================
+// Third‑Thumb pressure‑sensor control
+//
+// This header defines the pin assignments, servo ranges and global variables
+// used by the Third Thumb sketch.  It has been updated to support force
+// sensors (FSRs) under each big toe instead of ECG/EMG sensors.  Each sensor
+// feeds a simple voltage divider whose output is read via the Pico’s ADC pins.
+// The code calibrates a baseline at start‑up, applies a dead‑band to ignore
+// noise and uses exponential smoothing to filter the signal before mapping it
+// to servo angles.  See mainFunction.ino for implementation details.
+//
+//=============================================================================
 
-//depending on you setup, change these values below to match the wiring of the microcontroller
-#define tiltServoECGSensorPin 26 //tilt sensor pin # / user set
-#define openCloseServoECGSensorPin 27 //open and close sensor pin # / user set
-#define openCloseServoPin 6 //open and close servo pin # / user set
-#define tiltServoPin 7 //open and close pin # / user set
+double versionNumber = 0.02; // bump version to indicate pressure‑sensor update
 
-#define resetPosButton 10 //reset button pin # / user set
+// -----------------------------------------------------------------------------
+// Pin assignments
+// Depending on your wiring, change these values to match your hardware.  The
+// analog pins correspond to the force sensors on the right and left feet.
+// The servo pins connect to the MG996 or other servos that move the third
+// thumb laterally (tilt) and open/close motions.
+#define tiltPressureSensorPin      26 // analog pin for right‑foot pressure sensor
+#define openClosePressureSensorPin 27 // analog pin for left‑foot pressure sensor
+#define openCloseServoPin          6  // servo pin for open/close motion
+#define tiltServoPin               7  // servo pin for lateral/tilt motion
+#define resetPosButton             10 // button to reset servos to minimum
 
+// -----------------------------------------------------------------------------
+// LED state
+// 0 = off, 1 = on, 9 = blink.  The setLED() helper in extrasFunctions.ino
+// interprets these values.  Use ledState to provide feedback when pressure is
+// detected.
+int ledState = 0;
 
-int ledState = 0; //used to determine the power state of the led / changes within the code
+// -----------------------------------------------------------------------------
+// Servo positions and limits
+// These variables track the current position of each servo and define the
+// allowable motion range.  Adjust the minimum/maximum values to fit your
+// mechanical design.
+int tiltServoPos      = 0;
+int openCloseServoPos = 0;
+int tiltServoPosMinimum      = 20;
+int tiltServoPosMaximum      = 160;
+int openCloseServoPosMinimum = 20;
+int openCloseServoPosMaximum = 160;
 
-int tiltServoPos = 0; //used to deterine the current position of the tilt servo / changes within the code
-int openCloseServoPos = 0; //used to determine the current positon of the open and close servo / changes within the code
+// -----------------------------------------------------------------------------
+// Control variables (legacy)
+// bounceVeriable1 and bounceVeriable2 were used for threshold‑based control of
+// ECG sensors.  They are left defined for backward compatibility but are no
+// longer used in the pressure‑sensor implementation.
+bool bounceVeriable1 = false;
+bool bounceVeriable2 = false;
 
-int tiltServoPosMinimum = 20; //tilt servo minimum position / user set
-int tiltServoPosMaximum = 160; //tilt servo maximum position / user set
-int openCloseServoPosMinimum = 20; //open and close servo minimum position / user set
-int openCloseServoPosMaximum = 160; //open and close servo maximum position / user set
+// Debug menu flags
+bool debugMenu      = false;
+bool debugMenuBlock = false;
 
-bool bounceVeriable1 = false; //used to change the movement direction of the servos / changes within the code
-bool bounceVeriable2 = false; //used to change the movement direction of the servos / changes within the code
+// -----------------------------------------------------------------------------
+// Servo objects
+Servo tiltServo;
+Servo openCloseServo;
 
-bool debugMenu = false; //used to determine if the debug menu should be displayed or not / changes within the codes
-bool debugMenuBlock = false; //used to determine if the debug menu should be displayed or not / changes within the codes
+// -----------------------------------------------------------------------------
+// Calibration and filtering parameters
+// baselineTilt and baselineOpen store the no‑pressure baseline for each sensor.
+// filteredTilt and filteredOpen hold the smoothed pressure readings.  Adjust
+// calibrationSamples to change how many samples are averaged during
+// calibration.  deadBand defines the number of ADC counts above baseline that
+// must be exceeded before motion begins (to ignore small pressure changes).
+// alpha sets the smoothing factor for exponential filtering (0–1).  A lower
+// alpha yields stronger smoothing.
+float baselineTilt    = 0.0f;
+float baselineOpen    = 0.0f;
+float filteredTilt    = 0.0f;
+float filteredOpen    = 0.0f;
+const int   calibrationSamples = 200;
+const float deadBand           = 60.0f;   // ~0.05 V for 12‑bit ADC (0–4095)
+const float alpha              = 0.1f;
+const int   maxADCValue        = 4095;    // 12‑bit resolution on Pico ADC
 
-
-//define the servos
-Servo tiltServo; //defines the tilt servo
-Servo openCloseServo; //defines the open and close servo
-
-//define the functions
+// -----------------------------------------------------------------------------
+// Function prototypes
 void setup();
 void loop();
-
 void onStartup();
-
 void debugStart();
 void debugMenuFunction();
-
-void setLED();
+void setLED(int state = 0);
 void resetServoPos();
-
 void writeServos();
+// New helper for pressure‑sensor calibration
+void calibrate();
 
-#endif
+#endif // piPicoHeaderFile
