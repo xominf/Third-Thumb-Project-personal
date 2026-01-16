@@ -1,63 +1,71 @@
 #include "mainH.h"
 
-//define the writeServo() function
-//The way that this function works is that it checks if the output of the EMG/ECG sensors have reached a threshold written below. If this is done, it will move the
-//corresponding servo in one direction. This then triggers a latch and the next time the threshold is reached, the servo will move in the opposit direction. This 
-//loops forever.
-void writeServos(){
-  //starts checking the tilt sensor and servo
-  if(analogRead(tiltServoECGSensorPin) >= 700){
-    while((analogRead(tiltServoECGSensorPin) >= 700) && bounceVeriable1 == false){
-      if(tiltServoPos < tiltServoPosMaximum){
-        setLED(1);
-        tiltServo.write(tiltServoPos++);
-      }
-      else{
-        setLED(0);
-      }
-      if(analogRead(tiltServoECGSensorPin) < 700){
-        bounceVeriable1 = !bounceVeriable1;
-      }
-    }
-    while((analogRead(tiltServoECGSensorPin) >= 700) && bounceVeriable1 == true){
-      if(tiltServoPos > tiltServoPosMinimum){
-        setLED(1);
-        tiltServo.write(tiltServoPos--);
-      }
-      else{
-        setLED(0);
-      }
-      if(analogRead(tiltServoECGSensorPin) < 700){
-        bounceVeriable1 = !bounceVeriable1;
-      }
-    }
-  }
+// -----------------------------------------------------------------------------
+// writeServos()
+//
+// This function reads the force sensors under each foot, applies baseline
+// subtraction, dead‑band filtering and exponential smoothing, then maps the
+// resulting pressure values to servo angles.  It replaces the original
+// threshold‑and‑bounce implementation used for ECG/EMG sensors.
+void writeServos() {
+  // Read the raw analog values from the pressure sensors
+  float rawTilt = (float)analogRead(tiltPressureSensorPin);
+  float rawOpen = (float)analogRead(openClosePressureSensorPin);
 
-  //starts checking the open and close sensor and servo
-  if(analogRead(openCloseServoECGSensorPin) >= 700){
-    while((analogRead(openCloseServoECGSensorPin) >= 700) && bounceVeriable2 == false){
-      if(openCloseServoPos < openCloseServoPosMaximum){
-        setLED(1);
-        openCloseServo.write(openCloseServoPos++);
-      }
-      else{
-        setLED(0);
-      }
-      if(analogRead(openCloseServoECGSensorPin) < 700){
-        bounceVeriable2 = !bounceVeriable2;
-      }
-    }
-    while((analogRead(openCloseServoECGSensorPin) >= 700) && bounceVeriable2 == true){
-      if(openCloseServoPos > openCloseServoPosMinimum){
-        setLED(1);
-        openCloseServo.write(openCloseServoPos--);
-      }
-      else{
-        setLED(0);
-      }
-      if(analogRead(openCloseServoECGSensorPin) < 700){
-        bounceVeriable2 = !bounceVeriable2;
-      }
-    }
+  // Subtract the baseline and dead‑band.  Any result below zero is clipped to
+  // zero to prevent reverse movement when no pressure is applied.
+  float deltaTilt = rawTilt - baselineTilt - deadBand;
+  float deltaOpen = rawOpen - baselineOpen - deadBand;
+  if (deltaTilt < 0.0f) deltaTilt = 0.0f;
+  if (deltaOpen < 0.0f) deltaOpen = 0.0f;
+
+  // Exponential smoothing to reduce jitter
+  filteredTilt = alpha * deltaTilt + (1.0f - alpha) * filteredTilt;
+  filteredOpen = alpha * deltaOpen + (1.0f - alpha) * filteredOpen;
+
+  // Map the smoothed pressure to servo angles.  The map function returns
+  // integers, so cast the filtered values to int.  The maximum ADC value is
+  // defined in mainH.h (maxADCValue).  Values above maxADCValue are
+  // automatically constrained by map() and constrain().
+  int targetTilt = map((int)filteredTilt, 0, maxADCValue,
+                       tiltServoPosMinimum, tiltServoPosMaximum);
+  int targetOpen = map((int)filteredOpen, 0, maxADCValue,
+                       openCloseServoPosMinimum, openCloseServoPosMaximum);
+
+  // Constrain the targets to the specified ranges
+  targetTilt = constrain(targetTilt, tiltServoPosMinimum, tiltServoPosMaximum);
+  targetOpen = constrain(targetOpen, openCloseServoPosMinimum, openCloseServoPosMaximum);
+
+  // Write the servo positions
+  tiltServo.write(targetTilt);
+  openCloseServo.write(targetOpen);
+
+  // Provide LED feedback: turn on LED if any pressure is detected
+  if (deltaTilt > 0.0f || deltaOpen > 0.0f) {
+    setLED(1);
+  } else {
+    setLED(0);
   }
+}
+
+// -----------------------------------------------------------------------------
+// calibrate()
+//
+// Measure the analog pressure sensors multiple times to determine the baseline
+// (no‑pressure) value for each sensor.  This function should be called
+// during setup().  It blocks for calibrationSamples * 5 ms.
+void calibrate() {
+  long sumTilt = 0;
+  long sumOpen = 0;
+  for (int i = 0; i < calibrationSamples; i++) {
+    sumTilt += analogRead(tiltPressureSensorPin);
+    sumOpen += analogRead(openClosePressureSensorPin);
+    delay(5);
+  }
+  baselineTilt = (float)sumTilt / (float)calibrationSamples;
+  baselineOpen = (float)sumOpen / (float)calibrationSamples;
+
+  // Initialise the filtered values to zero
+  filteredTilt = 0.0f;
+  filteredOpen = 0.0f;
 }
