@@ -1,28 +1,29 @@
 #include "mainH.h"
 
 void setup() {
-
-  //attaches the tilt servo to the number assigned to the tiltServoPin variable and assign the min/max pwm of the servo to 1000/2000
+  // Attach the servos with user‑specified PWM limits (1000–2000 µs)
   tiltServo.attach(tiltServoPin, 1000, 2000);
-  //attaches the open and close servo to the number assigned to the openCloseServoPin variable and assign the min/max pwm of the servo to 1000/2000
   openCloseServo.attach(openCloseServoPin, 1000, 2000);
 
-  //Sets the pin assigned to the builtin led to the microcontroller as an output
+  // Configure built‑in LED
   pinMode(LED_BUILTIN, OUTPUT);
-  //sets the builtin led pin to low
   digitalWrite(LED_BUILTIN, LOW);
 
-  //runs the startup function
+  // Run user startup routine
   onStartup();
+
+  // Calibrate the pressure sensors.  The user should keep their toes relaxed
+  // during this period so the baseline represents zero pressure.
+  calibrate();
 }
 
 void loop() {
-  //start the debugging segment of code
+  // Process any incoming serial commands for debugging
   debugStart();
 
-  //start the main code functions
+  // Run the main servo control
   writeServos();
 
-  //start the code that resets the servos' positions
+  // Reset the servos if the reset button is pressed
   resetServoPos();
 }
